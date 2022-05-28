@@ -1,5 +1,7 @@
 __package__ = 'user.fm'
+
 import argparse
+import user.utils.print as print_utils
 from .exception import FmException
 from .repo import Repository
 
@@ -30,7 +32,7 @@ def main():
         else:
             raise FmException("Unknown command '" + op + "'.")
     except FmException as e:
-        print(str(e))
+        print_utils.put(str(e))
 
 if __name__ == '__main__':
     main()

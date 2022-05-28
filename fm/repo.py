@@ -3,7 +3,9 @@ import json
 import numpy as np
 import os
 import shutil
+import time
 import user.utils.fileio as fileio
+import user.utils.print as print_utils
 import user.utils.string_utils as string_utils
 from .exception import FmException
 
@@ -66,17 +68,19 @@ class RepositoryDelta:
         result = ''
         if detailed:
             def file2str(f: FileInfo):
-                return f.path + ' | ' + str(f.size) + ' | ' + f.md5
+                return f.md5 + ' | ' + str(f.size) + ' | ' + f.path
+            added_files = sorted(self.added_files, key=lambda f: f.path)
+            removed_files = sorted(self.removed_files, key=lambda f: f.path)
             sections = []
             if removed_count > 0:
                 section = ''
                 section += '%d files removed:\n' % removed_count
-                section += '\n'.join(file2str(f) for f in self.removed_files)
+                section += '\n'.join(file2str(f) for f in removed_files)
                 sections.append(section)
             if added_count > 0:
                 section = ''
                 section += '%d files added:\n' % added_count
-                section += '\n'.join(file2str(f) for f in self.added_files)
+                section += '\n'.join(file2str(f) for f in added_files)
                 sections.append(section)
             result += '\n'.join(sections)
         else:
@@ -168,23 +172,22 @@ class Repository:
             old_kept_files = [old_map[k] for k in kept_keys]
             new_kept_files = [new_map[k] for k in kept_keys]
 
-        # Search by file path.
-        search(lambda f: f.path)
-
-        # Search by file size.
-        for f in new_kept_files + added_files:
+        last_update_time = time.time()
+        update_files = new_kept_files + added_files
+        for i, f in enumerate(update_files):
             f.size = os.path.getsize(self.repo_dir + f.path)
-        search(lambda f: str(f.size) + '|' + f.path)
-
-        # Search by MD5.
-        for f in new_kept_files + added_files:
             with open(self.repo_dir + f.path, 'rb') as fp:
                 f.md5 = hashlib.md5(fp.read()).hexdigest()
-        search(lambda f: f.md5 + '|' + f.path)
+            if time.time() - last_update_time > 0.2:
+                last_update_time = time.time()
+                print_utils.put('Scanning files... (%d/%d)' % (i + 1, len(update_files)), same_line=True)
+            if i == len(update_files) - 1:
+                print_utils.put('%d files scanned.' % len(update_files))
+        search(lambda f: f.md5 + '|' + str(f.size) + '|' + f.path)
 
         # Exit if no changes.
         if len(added_files) + len(removed_files) == 0:
-            print('No changes detected.')
+            print_utils.put('No changes detected.')
             return
 
         # Save repository.
@@ -199,7 +202,7 @@ class Repository:
         repo_delta.removed_files = removed_files
         repo_delta.save(delta_file)
 
-        print(repo_delta.log(detailed=False))
-        with open(self.fm_dir + 'changes.txt', 'w') as f:
-            f.write(repo_delta.log(detailed=True))
+        print_utils.put(repo_delta.log(detailed=False))
+        with open(self.fm_dir + 'changes.txt', 'wb') as f:
+            f.write(repo_delta.log(detailed=True).encode('utf-8'))
         repo_delta.export(self.fm_dir + 'export', self.repo_dir)
