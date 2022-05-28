@@ -3,8 +3,8 @@ import json
 import numpy as np
 import os
 import shutil
-import utils.fileio
-import utils.string_utils
+import user.utils.fileio as fileio
+import user.utils.string_utils as string_utils
 from .exception import FmException
 
 FM_FOLDER = '.fm'
@@ -84,22 +84,22 @@ class RepositoryDelta:
         return result
 
     def export(self, dst_dir, src_dir):
-        dst_dir = utils.string_utils.to_folder_path(dst_dir)
-        src_dir = utils.string_utils.to_folder_path(src_dir)
+        dst_dir = string_utils.to_folder_path(dst_dir)
+        src_dir = string_utils.to_folder_path(src_dir)
         if os.path.exists(dst_dir):
             shutil.rmtree(dst_dir)
         for f in self.added_files:
-            src_path = utils.string_utils.to_file_path(src_dir + f.path)
-            dst_path = utils.string_utils.to_file_path(dst_dir + f.path)
-            dst_folder = utils.string_utils.to_parent_path(dst_path)
-            utils.fileio.mktree(dst_folder)
+            src_path = string_utils.to_file_path(src_dir + f.path)
+            dst_path = string_utils.to_file_path(dst_dir + f.path)
+            dst_folder = string_utils.to_parent_path(dst_path)
+            fileio.mktree(dst_folder)
             os.link(src_path, dst_path)
 
 class Repository:
     def __init__(self, repo_dir) -> None:
-        self.repo_dir = utils.string_utils.to_folder_path(repo_dir)
-        self.fm_dir = utils.string_utils.to_folder_path(self.repo_dir + FM_FOLDER)
-        self.delta_dir = utils.string_utils.to_folder_path(self.fm_dir + 'delta')
+        self.repo_dir = string_utils.to_folder_path(repo_dir)
+        self.fm_dir = string_utils.to_folder_path(self.repo_dir + FM_FOLDER)
+        self.delta_dir = string_utils.to_folder_path(self.fm_dir + 'delta')
         self.repo_file = self.fm_dir + 'repo.txt'
         self.data_file = self.fm_dir + 'data.npz'
 
