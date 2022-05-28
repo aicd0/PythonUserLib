@@ -140,7 +140,28 @@ class Repository:
         os.mkdir(self.delta_dir)
         self.save()
 
-    def commit(self):
+    def commit(self, enable_md5=False):
+        def get_size(f: FileInfo):
+            return os.path.getsize(self.repo_dir + f.path)
+
+        def get_md5(f: FileInfo):
+            with open(self.repo_dir + f.path, 'rb') as fp:
+                return hashlib.md5(fp.read()).hexdigest()
+
+        def scan(key):
+            nonlocal old_kept_files, new_kept_files
+            old_map = {key(f): f for f in old_kept_files}
+            new_map = {key(f): f for f in new_kept_files}
+            old_keys = set(old_map.keys())
+            new_keys = set(new_map.keys())
+            removed_keys = old_keys.difference(new_keys)
+            added_keys = new_keys.difference(old_keys)
+            kept_keys = old_keys.intersection(new_keys)
+            added_files.extend([new_map[k] for k in added_keys])
+            removed_files.extend([old_map[k] for k in removed_keys])
+            old_kept_files = [old_map[k] for k in kept_keys]
+            new_kept_files = [new_map[k] for k in kept_keys]
+
         if not os.path.exists(self.fm_dir):
             raise FmException("'" + self.repo_dir + "' is not a repository.")
 
@@ -158,50 +179,43 @@ class Repository:
         added_files = []
         removed_files = []
 
-        def search(key):
-            nonlocal old_kept_files, new_kept_files
-            old_map = {key(f): f for f in old_kept_files}
-            new_map = {key(f): f for f in new_kept_files}
-            old_keys = set(old_map.keys())
-            new_keys = set(new_map.keys())
-            removed_keys = old_keys.difference(new_keys)
-            added_keys = new_keys.difference(old_keys)
-            kept_keys = old_keys.intersection(new_keys)
-            added_files.extend([new_map[k] for k in added_keys])
-            removed_files.extend([old_map[k] for k in removed_keys])
-            old_kept_files = [old_map[k] for k in kept_keys]
-            new_kept_files = [new_map[k] for k in kept_keys]
+        scan(lambda f: f.path)
+        for f in added_files:
+            f.size = get_size(f)
+            f.md5 = get_md5(f)
 
-        last_update_time = time.time()
-        update_files = new_kept_files + added_files
-        for i, f in enumerate(update_files):
-            f.size = os.path.getsize(self.repo_dir + f.path)
-            with open(self.repo_dir + f.path, 'rb') as fp:
-                f.md5 = hashlib.md5(fp.read()).hexdigest()
-            if time.time() - last_update_time > 0.2:
-                last_update_time = time.time()
-                print_utils.put('Scanning files... (%d/%d)' % (i + 1, len(update_files)), same_line=True)
-            if i == len(update_files) - 1:
-                print_utils.put('%d files scanned.' % len(update_files))
-        search(lambda f: f.md5 + '|' + str(f.size) + '|' + f.path)
+        for f in new_kept_files:
+            f.size = get_size(f)
+            if enable_md5:
+                f.md5 = get_md5(f)
+        if enable_md5:
+            scan(lambda f: f.md5 + '|' + str(f.size) + '|' + f.path)
+        else:
+            scan(lambda f: str(f.size) + '|' + f.path)
+        for f in added_files:
+            if f.size is None:
+                f.size = get_size(f)
+            if f.md5 is None:
+                f.md5 = get_md5(f)
 
         # Exit if no changes.
         if len(added_files) + len(removed_files) == 0:
             print_utils.put('No changes detected.')
             return
 
-        # Save repository.
-        self.version += 1
-        self.data = new_repo_data
-        self.save()
-
         # Create delta file.
+        self.version += 1
         delta_file = self.delta_dir + '%d.npz' % self.version
         repo_delta = RepositoryDelta()
         repo_delta.added_files = added_files
         repo_delta.removed_files = removed_files
         repo_delta.save(delta_file)
 
+        # Save repository.
+        self.data = new_repo_data
+        self.save()
+
+        # Log.
         print_utils.put(repo_delta.log(detailed=False))
         with open(self.fm_dir + 'changes.txt', 'wb') as f:
             f.write(repo_delta.log(detailed=True).encode('utf-8'))

@@ -9,26 +9,27 @@ def init(repo_path):
     repo = Repository(repo_path)
     repo.init()
 
-def commit(repo_path):
+def commit(repo_path, **kwargs):
     repo = Repository(repo_path)
-    repo.commit()
+    repo.commit(**kwargs)
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('dir', type=str)
-    parser.add_argument('op', type=str)
+    parser.add_argument('dir', type=str, help='path to your repository')
+    parser.add_argument('op', type=str, help='operation to perform')
+    parser.add_argument('-m', '--md5', action='store_true', help='enable MD5 check')
     args = parser.parse_args()
-    return args.dir, args.op
+    return args.dir, args.op, args.md5
 
 def main():
-    repo_path, op = parse_args()
+    repo_path, op, md5 = parse_args()
     op = op.lower()
 
     try:
         if op == 'init':
             init(repo_path)
         elif op == 'commit':
-            commit(repo_path)
+            commit(repo_path, enable_md5=md5)
         else:
             raise FmException("Unknown command '" + op + "'.")
     except FmException as e:
