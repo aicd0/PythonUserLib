@@ -100,15 +100,23 @@ class RepositoryDelta:
             os.link(src_path, dst_path)
 
 class Repository:
-    def __init__(self, repo_dir) -> None:
-        self.repo_dir = string_utils.to_folder_path(repo_dir)
-        self.fm_dir = string_utils.to_folder_path(self.repo_dir + FM_FOLDER)
+    def __init__(self, repo_dir, retreat=False) -> None:
+        repo_dir = string_utils.to_folder_path(repo_dir)
+        self.repo_dir = repo_dir
+        if not os.path.isdir(self.repo_dir):
+            raise FmException("'" + self.repo_dir + "' not found.")
+
+        while True:
+            self.fm_dir = string_utils.to_folder_path(self.repo_dir + FM_FOLDER)
+            if not retreat or os.path.exists(self.fm_dir):
+                break
+            self.repo_dir = string_utils.to_parent_path(self.repo_dir)
+            if self.repo_dir == '':
+                raise FmException("'" + repo_dir + "' is not a repository.")
+
         self.delta_dir = string_utils.to_folder_path(self.fm_dir + 'delta')
         self.repo_file = self.fm_dir + 'repo.txt'
         self.data_file = self.fm_dir + 'data.npz'
-
-        if not os.path.isdir(self.repo_dir):
-            raise FmException("'" + self.repo_dir + "' not found.")
 
         self.version = 0
         self.data = RepositoryData()
@@ -141,6 +149,9 @@ class Repository:
         self.save()
 
     def commit(self, enable_md5=False):
+        if not os.path.exists(self.fm_dir):
+            raise FmException("'" + self.repo_dir + "' is not a repository.")
+
         def get_size(f: FileInfo):
             return os.path.getsize(self.repo_dir + f.path)
 
@@ -161,9 +172,6 @@ class Repository:
             removed_files.extend([old_map[k] for k in removed_keys])
             old_kept_files = [old_map[k] for k in kept_keys]
             new_kept_files = [new_map[k] for k in kept_keys]
-
-        if not os.path.exists(self.fm_dir):
-            raise FmException("'" + self.repo_dir + "' is not a repository.")
 
         self.load()
         old_repo_data = self.data

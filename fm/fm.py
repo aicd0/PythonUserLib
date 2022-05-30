@@ -10,7 +10,7 @@ def init(repo_path):
     repo.init()
 
 def commit(repo_path, **kwargs):
-    repo = Repository(repo_path)
+    repo = Repository(repo_path, retreat=True)
     repo.commit(**kwargs)
 
 def parse_args():
